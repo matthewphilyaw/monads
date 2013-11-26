@@ -1,0 +1,4 @@
+monads
+======
+
+monads in javascript
