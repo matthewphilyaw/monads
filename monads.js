@@ -48,7 +48,7 @@ var mergeOrder = function(a,b) {
     return c;
 }
 
-var unit = function(orderModel) {
+var orderUnit = function(orderModel) {
     return {
         model: orderModel,
         order: {}
@@ -70,6 +70,8 @@ var orderBind = function(orderMonad, fn) {
     };
 };
 
+// needs to be tweaked. If product is not found you will get empty lines, and no total.
+// should it just return an empty order?
 var addOrderLines = function(model) {
     var lines = [],
         total = 0;
@@ -104,9 +106,70 @@ var addCustomer = function(model) {
             };
         }
     }
+
+    return {
+        model: model,
+        order: {}
+    };
 }
 
 // --------------------------------------------------- end order monadic thingys
+
+var validationUnit = function(odr) {
+    return {
+        order: odr,
+        isValid: undefined,
+        log: ""
+    };
+};
+
+var validationBind = function(m, fn) {
+    var order = m.order,
+        log = m.log,
+        result;
+
+    // if last monad was not valid, then stop processing rules.
+    if (m.isValid !== undefined && !m.isValid) return m;
+
+    result = fn(order);
+    return {
+        order: result.order,
+        isValid: result.isValid,
+        log: log + result.log
+    };
+}
+
+var totalGreaterThanZero = function(order) {
+    var isValid = false,
+        log = "";
+
+    isValid = order.total > 0;
+
+    if (!isValid) log = "total is less than zero\n";
+
+    return {
+        order: order,
+        isValid: isValid,
+        log: log
+    };
+}
+
+var totalUnderTwoHundredThousand = function(order) {
+    var isValid = false,
+        log = "";
+
+    isValid = order.total < 200000;
+
+    if (!isValid) log = "total is over 200000\n";
+
+    return {
+        order: order,
+        isValid: isValid,
+        log: log
+    };
+}
+
+// --------------------------------------------------- end validation monadic thingys
 
 // create pipe function will produce a pipe function for a particular bind and set of functions.
 var createPipe = function(bind, functions) {
@@ -118,22 +181,39 @@ var createPipe = function(bind, functions) {
     }
 }
 
-var buildOrder = createPipe(orderBind, [addOrderLines, addCustomer]);
+var processOrderModels = function(orderModels) {
+    var buildOrder = createPipe(orderBind, [addOrderLines, addCustomer]),
+        validateOrder = createPipe(validationBind, [totalGreaterThanZero, totalUnderTwoHundredThousand]);
 
-var batmanModel = {
-    productIds: [35, 45],
-    customerId: 45
-};
+    var orders = [];
+    for (i in orderModels) {
+        var orderU = buildOrder(orderUnit(orderModels[i])),
+            validatedOrder = validateOrder(validationUnit(orderU.order));
 
-var rogerRabit = {
-    productIds: [12, 12, 35],
-    customerId: 33
+        console.log("Customer: " + orderU.order.customer.name.last + ", " + orderU.order.customer.name.first);
+        console.log(orderU);
+        console.log(validatedOrder);
+        orders.push(validatedOrder);
+    }
 }
 
-console.log("batman:");
-var batmanOrder = buildOrder(unit(batmanModel));
-console.log(batmanOrder);
+var orderModels = [
+    {
+        productIds: [35, 45],
+        customerId: 45
+    },
+    {
+        productIds: [12, 12, 35],
+        customerId: 33
+    },
+    {
+        productIds: [12, 12, 12, 12, 12, 45, 45, 45, 45, 45, 45],
+        customerId: 45
+    },
+    {
+        productIds: [],
+        customerId: 33
+    }];
 
-console.log("roger rabbit");
-var rogerOrder = buildOrder(unit(rogerRabit));
-console.log(rogerOrder);
+// have a list of validated orders now....
+var validatedOrders = processOrderModels(orderModels);
